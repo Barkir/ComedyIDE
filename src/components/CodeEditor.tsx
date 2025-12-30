@@ -1,17 +1,34 @@
-import { Box, Button, Text, Flex } from "@chakra-ui/react"
+import { Box, Button, Text, Flex, Spinner } from "@chakra-ui/react"
 import { Editor } from "@monaco-editor/react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import "./CodeEditor.css"
+
+// fakeLLMEmulation
+const fakeLLMApiCall = (text) => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const response = {
+        weak_spots: [
+          {word: "короче", reason: "слово-паразит", cringe: 4}
+        ]
+      };
+      resolve(response);
+    }, 1000);
+  })
+}
 
 
 const CodeEditor = () => {
   const [value, setValue] = useState('')
   const keywords = ["something"];
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
 
   const decorationsRef = useRef([]);
+
+  const debounceTimerRef = useRef(null);
 
   const handleCreateCharacter = () => {
     console.log("Создали персонажа");
@@ -23,22 +40,24 @@ const CodeEditor = () => {
     monacoRef.current = monaco;
   };
 
-  useEffect(() => {
-    if (!editorRef.current || !monacoRef.current) return;
+  const applyDecorations = (weakSpots) => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
-    const model = editor.getModel();
-    if (!model) return;
-    console.log("using effect");
-    const newDecorations = [];
-    keywords.forEach((word) => {
-      const regex = new RegExp(`\\b${word}\\b`, "gi");
+    if (!editor || !monaco) return;
 
+    const model = editor.getModel();
+    const newDecorations = [];
+
+    weakSpots.forEach((item) => {
+      const regex = new RegExp(`${item.word}`, "gi")
       let match;
+      console.log(value)
+      console.log(regex);
+      console.log(item.word);
       while ((match = regex.exec(value)) !== null) {
         const start = model.getPositionAt(match.index);
-        const end = model.getPositionAt(match.index + word.length);
-
+        const end = model.getPositionAt(match.index + item.word.length);
+        console.log(match);
         newDecorations.push({
           range: new monaco.Range(
             start.lineNumber,
@@ -48,17 +67,45 @@ const CodeEditor = () => {
           ),
           options: {
             inlineClassName: "keyword-glow",
-            hoverMessage: {value: "this is a keyword!"}
-          }
-        })
+            hoverMessage: { value: `кринжа навалил братик`}
+          },
+        });
       }
     });
 
-  decorationsRef.current = editor.deltaDecorations(
-    decorationsRef.current,
-    newDecorations
-  );
+    decorationsRef.current = editor.deltaDecorations(
+      decorationsRef.current,
+      newDecorations
+    );
+  };
 
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    if (!value.trim()) {
+      const editor = editorRef.current;
+      if (editor) decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
+      return;
+    }
+
+    debounceTimerRef.current = setTimeout(async () => {
+      console.log("wassup");
+      setIsAnalyzing(true);
+
+      try {
+        const data = await fakeLLMApiCall(value);
+        console.log(data);
+        applyDecorations(data.weak_spots);
+      } catch (e) {
+        console.error("Analysis error");
+      } finally {
+        setIsAnalyzing(false);
+      }
+    }, 1500);
+
+    return () => clearTimeout(debounceTimerRef.current);
   }, [value]);
 
   return (
