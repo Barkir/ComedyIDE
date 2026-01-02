@@ -2,6 +2,11 @@ import { Box, Button, Text, Flex, Spinner } from "@chakra-ui/react"
 import { Editor } from "@monaco-editor/react"
 import { useState, useRef, useEffect, useCallback } from "react"
 import "./CodeEditor.css"
+import { linterModelRole, linterModelSystemPrompt } from "./prompts.tsx"
+import * as Models from "./models.tsx"
+
+import ollama from 'ollama'
+
 
 // fakeLLMEmulation
 const fakeLLMApiCall = (text) => {
@@ -15,6 +20,50 @@ const fakeLLMApiCall = (text) => {
       resolve(response);
     }, 1000);
   })
+}
+
+const smartParse = (rawContent) => {
+  try {
+    // 1. Очищаем от маркдаун-оберток ```json ... ```
+    let clean = rawContent.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    // 2. Находим границы реального JSON (на случай если модель добавила текст "от себя")
+    const firstBrace = clean.search(/[\[\{]/); // Находит первую { или [
+    const lastBrace = Math.max(clean.lastIndexOf('}'), clean.lastIndexOf(']')); // Находит последнюю } или ]
+
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      clean = clean.substring(firstBrace, lastBrace + 1);
+    }
+
+    return JSON.parse(clean);
+  } catch (err) {
+    console.error("❌ Не удалось распарсить даже после очистки!");
+    console.log("Сырые данные:", rawContent);
+    return null;
+  }
+};
+
+const makeQwenResponse = async (text) => {
+  console.log("making response to qwen with this text:");
+  console.log(text);
+  try {
+  const response = await ollama.chat({
+    model: Models.bielik11b,
+    messages: [{role: linterModelRole, content: linterModelSystemPrompt + text}],
+    options: {
+      temperature: 0.1,
+      num_ctx: 4096,
+      top_p: 0.9,
+      repeat_penalty: 1.1,
+      num_predict: 500
+    },
+    format: "json"
+  });
+  return response;
+  } catch (error) {
+    console.error("error message: ", error);
+    return null;
+  }
 }
 
 
@@ -40,7 +89,7 @@ const CodeEditor = () => {
     monacoRef.current = monaco;
   };
 
-  const applyDecorations = (weakSpots) => {
+  const applyDecorations = (data) => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
@@ -48,15 +97,15 @@ const CodeEditor = () => {
     const model = editor.getModel();
     const newDecorations = [];
 
-    weakSpots.forEach((item) => {
-      const regex = new RegExp(`${item.word}`, "gi")
+    data.analyzed.forEach((item) => {
+      const regex = new RegExp(`${item.text}`, "gi")
       let match;
-      console.log(value)
-      console.log(regex);
-      console.log(item.word);
+      // console.log(value)
+      // console.log(regex);
+      console.log(item.text);
       while ((match = regex.exec(value)) !== null) {
         const start = model.getPositionAt(match.index);
-        const end = model.getPositionAt(match.index + item.word.length);
+        const end = model.getPositionAt(match.index + item.text.length);
         console.log(match);
         newDecorations.push({
           range: new monaco.Range(
@@ -67,7 +116,7 @@ const CodeEditor = () => {
           ),
           options: {
             inlineClassName: "keyword-glow",
-            hoverMessage: { value: `кринжа навалил братик`}
+            hoverMessage: { value: item.cure}
           },
         });
       }
@@ -95,9 +144,11 @@ const CodeEditor = () => {
       setIsAnalyzing(true);
 
       try {
-        const data = await fakeLLMApiCall(value);
-        console.log(data);
-        applyDecorations(data.weak_spots);
+        const data = await makeQwenResponse(value);
+        const content = data?.message.content;
+        const parsedContent = smartParse(content);
+        console.log(parsedContent);
+        applyDecorations(parsedContent);
       } catch (e) {
         console.error("Analysis error");
       } finally {
@@ -149,14 +200,13 @@ const CodeEditor = () => {
       borderTop="1px solid"
       borderColor="gray.700"
       display="flex"
-      justifyContent="flex-end"
+      justifyContent="center"
     >
       <Button
-        colorScheme="green"
+        colorScheme="purple"
         size="lg"
-        onClick={handleCreateCharacter}
         isDisabled={!value.trim()}
-      >Создать персонажа</Button>
+      >Запустить симуляцию</Button>
     </Box>
     </Flex>
 
