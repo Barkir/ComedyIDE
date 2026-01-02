@@ -1,11 +1,32 @@
-import { Box, Button, Text, Flex, Spinner } from "@chakra-ui/react"
+import {
+Box,
+Button,
+Text,
+Flex,
+Spinner,
+VStack,
+HStack,
+Avatar,
+AvatarBadge,
+Heading,
+Divider
+} from "@chakra-ui/react"
+
+
 import { Editor } from "@monaco-editor/react"
 import { useState, useRef, useEffect, useCallback } from "react"
 import "./CodeEditor.css"
-import { linterModelRole, linterModelSystemPrompt } from "./prompts.tsx"
+import * as Prompts from "./prompts.tsx"
 import * as Models from "./models.tsx"
+import * as Roles from "./roles.tsx"
 
 import ollama from 'ollama'
+
+import PivnoySlava from "../assets/characters/PivnoySlava.png";
+import BoomerMarina from "../assets/characters/BoomerMarina.png";
+import SnobArtem from "../assets/characters/SnobArtem.png";
+import ZoomerLiza from "../assets/characters/ZoomerLiza.png";
+import BadOleg from "../assets/characters/BadOleg.png";
 
 
 // fakeLLMEmulation
@@ -22,14 +43,34 @@ const fakeLLMApiCall = (text) => {
   })
 }
 
+const startSimulation = async (text) => {
+  console.log("симуляция запущена");
+  try {
+    const response = await ollama.chat({
+      model: Models.bielik11b,
+      messages: [{role: Prompts.linterModelRole, content: Prompts.simulationPrompt + Roles.BoomerMarina + "\n----------------\n" +text}],
+      options: {
+        temperature: 1,
+        num_ctx: 10000,
+      },
+      format: "json"
+    });
+    console.log(response);
+    return response;
+  } catch {error} {
+    console.error("error:", error);
+    return null;
+
+  }
+
+}
+
 const smartParse = (rawContent) => {
   try {
-    // 1. Очищаем от маркдаун-оберток ```json ... ```
     let clean = rawContent.replace(/```json/g, "").replace(/```/g, "").trim();
 
-    // 2. Находим границы реального JSON (на случай если модель добавила текст "от себя")
-    const firstBrace = clean.search(/[\[\{]/); // Находит первую { или [
-    const lastBrace = Math.max(clean.lastIndexOf('}'), clean.lastIndexOf(']')); // Находит последнюю } или ]
+    const firstBrace = clean.search(/[\[\{]/);
+    const lastBrace = Math.max(clean.lastIndexOf('}'), clean.lastIndexOf(']'));
 
     if (firstBrace !== -1 && lastBrace !== -1) {
       clean = clean.substring(firstBrace, lastBrace + 1);
@@ -46,24 +87,24 @@ const smartParse = (rawContent) => {
 const makeQwenResponse = async (text) => {
   console.log("making response to qwen with this text:");
   console.log(text);
-  try {
-  const response = await ollama.chat({
-    model: Models.bielik11b,
-    messages: [{role: linterModelRole, content: linterModelSystemPrompt + text}],
-    options: {
-      temperature: 0.1,
-      num_ctx: 4096,
-      top_p: 0.9,
-      repeat_penalty: 1.1,
-      num_predict: 500
-    },
-    format: "json"
-  });
-  return response;
-  } catch (error) {
-    console.error("error message: ", error);
-    return null;
-  }
+  // try {
+  // const response = await ollama.chat({
+  //   model: Models.bielik11b,
+  //   messages: [{role: linterModelRole, content: linterModelSystemPrompt + text}],
+  //   options: {
+  //     temperature: 0.1,
+  //     num_ctx: 4096,
+  //     top_p: 0.9,
+  //     repeat_penalty: 1.1,
+  //     num_predict: 500
+  //   },
+  //   format: "json"
+  // });
+  return text;
+  // } catch (error) {
+  //   console.error("error message: ", error);
+  //   return null;
+  // }
 }
 
 
@@ -146,6 +187,7 @@ const CodeEditor = () => {
       try {
         const data = await makeQwenResponse(value);
         const content = data?.message.content;
+        console.log(content);
         const parsedContent = smartParse(content);
         console.log(parsedContent);
         applyDecorations(parsedContent);
@@ -161,8 +203,10 @@ const CodeEditor = () => {
 
   return (
     <Flex
-      direction="column"
-      height="80vh"
+      direction="row"
+      height="90vh"
+      gap={4}
+      p={4}
       width="100%">
     <Box flex="1" borderRight="1px solid" borderColor="gray.700">
       <Editor
@@ -186,27 +230,84 @@ const CodeEditor = () => {
                   overviewRulerLanes: 0,
         }}
         />
-    </Box>
 
-    <Box flex="1" p={4} bg="gray.900" color="white" overflow="auto">
-      <Text whiteSpace="pre-wrap" fontSize="sm">
-      {value}
-      </Text>
-    </Box>
-
-    <Box
-      p={3}
-      bg="gray.900"
-      borderTop="1px solid"
-      borderColor="gray.700"
-      display="flex"
-      justifyContent="center"
-    >
       <Button
         colorScheme="purple"
         size="lg"
         isDisabled={!value.trim()}
+        onClick = {() => startSimulation(value)}
       >Запустить симуляцию</Button>
+    </Box>
+
+    <Box
+      flex="1"
+      maxW="300px"
+      p={4}
+      bg="gray.800"
+      borderRadius="md"
+      borderColor="gray.600"
+    >
+      <Text mb={4} fontWeight="bold" color="gray.300" fonSize="sm">Виртуальный зал</Text>
+      <VStack spacing={4} align="stretch">
+      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
+        <Avatar name="Slavik" src={PivnoySlava} size="md">
+          <AvatarBadge boxSize="1.25em" bg="green.500" /> {/* Зеленый - значит готов слушать */}
+        </Avatar>
+        <VStack align="start" spacing={0}>
+          <Text fontWeight="bold" fontSize="sm">Славик</Text>
+          <Text fontSize="xs" color="gray.400">Ждет прикола</Text>
+        </VStack>
+      </HStack>
+      </VStack>
+
+      <VStack spacing={4} align="stretch">
+      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
+        <Avatar name="Slavik" src={BoomerMarina} size="md">
+          <AvatarBadge boxSize="1.25em" bg="green.500" /> {/* Зеленый - значит готов слушать */}
+        </Avatar>
+        <VStack align="start" spacing={0}>
+          <Text fontWeight="bold" fontSize="sm">Марина</Text>
+          <Text fontSize="xs" color="gray.400">В ожидании катарсиса</Text>
+        </VStack>
+      </HStack>
+      </VStack>
+
+      <VStack spacing={4} align="stretch">
+      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
+        <Avatar name="Slavik" src={SnobArtem} size="md">
+          <AvatarBadge boxSize="1.25em" bg="green.500" /> {/* Зеленый - значит готов слушать */}
+        </Avatar>
+        <VStack align="start" spacing={0}>
+          <Text fontWeight="bold" fontSize="sm">Артем</Text>
+          <Text fontSize="xs" color="gray.400">Ушел в анализ</Text>
+        </VStack>
+      </HStack>
+      </VStack>
+
+      <VStack spacing={4} align="stretch">
+      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
+        <Avatar name="Slavik" src={BadOleg} size="md">
+          <AvatarBadge boxSize="1.25em" bg="green.500" /> {/* Зеленый - значит готов слушать */}
+        </Avatar>
+        <VStack align="start" spacing={0}>
+          <Text fontWeight="bold" fontSize="sm">Олег</Text>
+          <Text fontSize="xs" color="gray.400">Хочет жести</Text>
+        </VStack>
+      </HStack>
+      </VStack>
+
+      <VStack spacing={4} align="stretch">
+      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
+        <Avatar name="Slavik" src={ZoomerLiza} size="md">
+          <AvatarBadge boxSize="1.25em" bg="green.500" /> {/* Зеленый - значит готов слушать */}
+        </Avatar>
+        <VStack align="start" spacing={0}>
+          <Text fontWeight="bold" fontSize="sm">Лиза</Text>
+          <Text fontSize="xs" color="gray.400">Ща тик-ток досмотрю сори</Text>
+        </VStack>
+      </HStack>
+      </VStack>
+
     </Box>
     </Flex>
 
