@@ -30,8 +30,8 @@ export const simulationPrompt = `
     Вот пример структуры, который ты должен вернуть
     {
   "agent_name": "Славик (Подпивас)",
-  "overall_mood": "Заскучал",
-  "score_1_to_10": 4,
+  "mood": "Заскучал",
+  "score": 4,
   "reactions": [
     {
       "timestamp": "00:15",

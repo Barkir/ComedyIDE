@@ -108,28 +108,6 @@ export const FileSideBar = ({ onSelectFile }) => {
 
 };
 
-const startSimulation = async (text) => {
-  console.log("симуляция запущена");
-  try {
-    const response = await ollama.chat({
-      model: Models.bielik11b,
-      messages: [{role: Prompts.linterModelRole, content: Prompts.simulationPrompt + Roles.BoomerMarina + "\n----------------\n" +text}],
-      options: {
-        temperature: 1,
-        num_ctx: 10000,
-      },
-      format: "json"
-    });
-    console.log(response);
-    return response;
-  } catch {error} {
-    console.error("error:", error);
-    return null;
-
-  }
-
-}
-
 const smartParse = (rawContent) => {
   try {
     let clean = rawContent.replace(/```json/g, "").replace(/```/g, "").trim();
@@ -215,6 +193,25 @@ const CodeEditor = () => {
   const [currentFileId, setCurrentFileId] = useState<number | null>(null);
   const jokes = useLiveQuery(() => db.jokes.toArray()) || [];
 
+  const [scores, setScores] = useState({
+    "Славик":   -1,
+    "Марина":   -1,
+    "Артем":    -1,
+    "Олег":     -1,
+    "Лиза":     -1,
+  });
+
+
+  const activeCharacters = [
+    {id: "Лиза", role: Roles.ZoomerLiza},
+    {id: "Артем", role: Roles.SnobArtem},
+    {id: "Славик", role: Roles.PivnoySlava},
+    {id: "Олег", role: Roles.BadOleg},
+    {id: "Марина", role: Roles.BoomerMarina}
+  ];
+
+  const [isSimulating, setIsSimulating] = useState(false);
+
   const [value, setValue] = useState('')
   const keywords = ["something"];
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -231,11 +228,65 @@ const CodeEditor = () => {
     console.log(value);
   }
 
+
+
+
+const handleRunSimulation = async (text) => {
+  for (const char of activeCharacters) {
+    const simulationResult  = await startSimulation(
+      text, char.role
+    );
+
+
+  console.log("Ставим оценки");
+  setScores(prevScores => ({
+    ...prevScores,
+    [char.id]: simulationResult.score
+  }));
+  };
+}
+
+const startSimulation = async (text, characterRole) => {
+  console.log("симуляция запущена");
+  try {
+    const response = await ollama.chat({
+      model: Models.bielik11b,
+      messages: [{role: Prompts.linterModelRole, content: Prompts.simulationPrompt + characterRole + "\n----------------\n" +text}],
+      options: {
+        temperature: 1,
+        num_ctx: 10000,
+      },
+      format: "json"
+    });
+    console.log(response);
+    const jsonResult = JSON.parse(response.message.content);
+    return jsonResult;
+  } catch {error} {
+    console.error("error:", error);
+    return null;
+
+  }
+}
+
+
+
+  const handleEditorChange = async (newValue: string | undefined) => {
+    const text = newValue || "";
+    setValue(text);
+
+    if (currentFileId) {
+      await db.jokes.update(currentFileId, {
+        content: text,
+        updatedAt: Date.now(),
+      });
+    }
+  };
+
   const handleCreateNewFile = async () => {
   const name = prompt("Введите название бита:");
   if (name) {
     const id = await db.jokes.add({
-      name: name.endsWith('.js') ? name : `${name}.js`,
+      name: name.endsWith('.txt') ? name : `${name}.txt`,
       content: "",
       updatedAt: Date.now()
     });
@@ -245,7 +296,7 @@ const CodeEditor = () => {
   }
   }
 
-  const handleSelectFile = () => {
+  const handleSelectFile = (joke) => {
     setCurrentFileId(joke.id);
     setValue(joke.content);
   }
@@ -357,10 +408,10 @@ const CodeEditor = () => {
             cursor="pointer"
             borderRadius="md"
             _hover={{ bg: "gray.800" }}
-            bg={currentFileId === joke.id ? "gray.700" : "transparent"} // Подсветка активного
+            bg={currentFileId === joke.id ? "gray.700" : "transparent"}
             onClick={() => handleSelectFile(joke)}
           >
-            <Text color="orange.400" fontSize="sm">JS</Text>
+            <Text color="orange.400" fontSize="sm">TXT</Text>
             <Text fontSize="sm" isTruncated>{joke.name}</Text>
           </HStack>
         ))}
@@ -374,7 +425,7 @@ const CodeEditor = () => {
         theme="vs-dark"
         value={value}
         onMount={handleEditorDidMount}
-        onChange={(newValue) => setValue(newValue || "")}
+        onChange={handleEditorChange}
         options={{minimap: {enabled: false},
                   fontSize: 16,
                   fontFamily: "'IBM Plex Mono'",
@@ -395,7 +446,7 @@ const CodeEditor = () => {
         colorScheme="purple"
         size="lg"
         isDisabled={!value.trim()}
-        onClick = {() => startSimulation(value)}
+        onClick = {() => handleRunSimulation(value)}
       >Запустить симуляцию</Button>
     </Box>
 
@@ -411,35 +462,35 @@ const CodeEditor = () => {
       name="Славик"
       status="Ждет прикола"
       icon={PivnoySlava}
-      score={5}
+      score={scores["Славик"]}
       />
 
       <CharacterCard
       name="Марина"
       status="В ожидании катарсиса"
       icon={BoomerMarina}
-      score={7}
+      score={scores["Марина"]}
       />
 
       <CharacterCard
       name="Артем"
       status="wtf...."
       icon={SnobArtem}
-      score={2}
+      score={scores["Артем"]}
       />
 
       <CharacterCard
       name="Олег"
       status="да, это жестко"
       icon={BadOleg}
-      score={5}
+      score={scores["Олег"]}
       />
 
       <CharacterCard
       name="Лиза"
       status="я тик-ток"
       icon={ZoomerLiza}
-      score={5}
+      score={scores["Лиза"]}
       />
 
     </Box>
