@@ -13,6 +13,7 @@ Divider
 } from "@chakra-ui/react"
 
 
+import { keyframes } from "@emotion/react"
 import { Editor } from "@monaco-editor/react"
 import { useState, useRef, useEffect, useCallback } from "react"
 import "./CodeEditor.css"
@@ -28,6 +29,33 @@ import SnobArtem from "../assets/characters/SnobArtem.png";
 import ZoomerLiza from "../assets/characters/ZoomerLiza.png";
 import BadOleg from "../assets/characters/BadOleg.png";
 
+
+const pulseAnimation = keyframes`
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+`;
+
+const getPulseAnim = (color) => keyframes`
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0px ${color}
+  }
+  50% {
+    transform: scale(1.05);
+    /* Внутреннее плотное свечение + внешнее мягкое облако */
+    box-shadow: 0 0 15px 5px ${color}
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0px ${color}
+`;
+
+const glowAnimation = keyframes`
+  0% { box-shadow: 0 0 0 0px rgba(72, 187, 120, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(72, 187, 120, 0); }
+  100% { box-shadow: 0 0 0 0px rgba(72, 187, 120, 0); }
+`;
 
 // fakeLLMEmulation
 const fakeLLMApiCall = (text) => {
@@ -83,6 +111,43 @@ const smartParse = (rawContent) => {
     return null;
   }
 };
+
+const getGlowColor = (score) => {
+  if (score >= 7) return "#38A169"; // Аналог green.500
+  if (score >= 5) return "#ECC94B"; // Аналог yellow.400
+  if (score >= 0) return "#E53E3E"; // Аналог red.500
+  return "#A0AEC0";                // Аналог gray.500
+}
+
+const getStatusColor = (score) => {
+  if (score >= 7) return "green.500";
+  if (score >= 5) return "yellow.400";
+  if (score >= 0) return "red.500";
+  return "gray.500";
+}
+
+const CharacterCard = ({name, status, icon, score}) => {
+  const badgeColor = getStatusColor(score);
+  const glowColor = getGlowColor(score);
+  return <VStack spacing={4} align="stretch">
+      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
+        <Avatar
+        _hover={{
+          animation: `${getPulseAnim(glowColor)} 1.5s infinite ease-in-out`,
+          cursor: "pointer",
+          // border: `2px solid ${glowColor}`,
+          zIndex: 10, // Чтобы свечение было поверх других элементов
+        }}
+        name={name} src={icon} size="md" border="2px solid" borderColor={badgeColor}>
+          <AvatarBadge boxSize="1.25em" bg={badgeColor} /> {/* Зеленый - значит готов слушать */}
+        </Avatar>
+        <VStack align="start" spacing={0}>
+          <Text fontWeight="bold" fontSize="sm">{name}</Text>
+          <Text fontSize="xs" color="gray.400">{status}</Text>
+        </VStack>
+      </HStack>
+      </VStack>
+}
 
 const makeQwenResponse = async (text) => {
   console.log("making response to qwen with this text:");
@@ -247,66 +312,40 @@ const CodeEditor = () => {
       borderRadius="md"
       borderColor="gray.600"
     >
-      <Text mb={4} fontWeight="bold" color="gray.300" fonSize="sm">Виртуальный зал</Text>
-      <VStack spacing={4} align="stretch">
-      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
-        <Avatar name="Slavik" src={PivnoySlava} size="md">
-          <AvatarBadge boxSize="1.25em" bg="green.500" /> {/* Зеленый - значит готов слушать */}
-        </Avatar>
-        <VStack align="start" spacing={0}>
-          <Text fontWeight="bold" fontSize="sm">Славик</Text>
-          <Text fontSize="xs" color="gray.400">Ждет прикола</Text>
-        </VStack>
-      </HStack>
-      </VStack>
+      <CharacterCard
+      name="Славик"
+      status="Ждет прикола"
+      icon={PivnoySlava}
+      score={5}
+      />
 
-      <VStack spacing={4} align="stretch">
-      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
-        <Avatar name="Slavik" src={BoomerMarina} size="md">
-          <AvatarBadge boxSize="1.25em" bg="green.500" /> {/* Зеленый - значит готов слушать */}
-        </Avatar>
-        <VStack align="start" spacing={0}>
-          <Text fontWeight="bold" fontSize="sm">Марина</Text>
-          <Text fontSize="xs" color="gray.400">В ожидании катарсиса</Text>
-        </VStack>
-      </HStack>
-      </VStack>
+      <CharacterCard
+      name="Марина"
+      status="В ожидании катарсиса"
+      icon={BoomerMarina}
+      score={7}
+      />
 
-      <VStack spacing={4} align="stretch">
-      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
-        <Avatar name="Slavik" src={SnobArtem} size="md">
-          <AvatarBadge boxSize="1.25em" bg="green.500" /> {/* Зеленый - значит готов слушать */}
-        </Avatar>
-        <VStack align="start" spacing={0}>
-          <Text fontWeight="bold" fontSize="sm">Артем</Text>
-          <Text fontSize="xs" color="gray.400">Ушел в анализ</Text>
-        </VStack>
-      </HStack>
-      </VStack>
+      <CharacterCard
+      name="Артем"
+      status="wtf...."
+      icon={SnobArtem}
+      score={2}
+      />
 
-      <VStack spacing={4} align="stretch">
-      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
-        <Avatar name="Slavik" src={BadOleg} size="md">
-          <AvatarBadge boxSize="1.25em" bg="green.500" /> {/* Зеленый - значит готов слушать */}
-        </Avatar>
-        <VStack align="start" spacing={0}>
-          <Text fontWeight="bold" fontSize="sm">Олег</Text>
-          <Text fontSize="xs" color="gray.400">Хочет жести</Text>
-        </VStack>
-      </HStack>
-      </VStack>
+      <CharacterCard
+      name="Олег"
+      status="да, это жестко"
+      icon={BadOleg}
+      score={5}
+      />
 
-      <VStack spacing={4} align="stretch">
-      <HStack spacing={3} p={2} _hover={{ bg: "gray.700" }} borderRadius="md" transition="0.2s">
-        <Avatar name="Slavik" src={ZoomerLiza} size="md">
-          <AvatarBadge boxSize="1.25em" bg="green.500" /> {/* Зеленый - значит готов слушать */}
-        </Avatar>
-        <VStack align="start" spacing={0}>
-          <Text fontWeight="bold" fontSize="sm">Лиза</Text>
-          <Text fontSize="xs" color="gray.400">Ща тик-ток досмотрю сори</Text>
-        </VStack>
-      </HStack>
-      </VStack>
+      <CharacterCard
+      name="Лиза"
+      status="я тик-ток"
+      icon={ZoomerLiza}
+      score={5}
+      />
 
     </Box>
     </Flex>
