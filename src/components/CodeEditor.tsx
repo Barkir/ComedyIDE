@@ -20,6 +20,8 @@ import "./CodeEditor.css"
 import * as Prompts from "./prompts.tsx"
 import * as Models from "./models.tsx"
 import * as Roles from "./roles.tsx"
+import { db } from "./indexedDB.tsx"
+import { useLiveQuery } from "dexie-react-hooks";
 
 import ollama from 'ollama'
 
@@ -70,6 +72,41 @@ const fakeLLMApiCall = (text) => {
     }, 1000);
   })
 }
+
+export const FileSideBar = ({ onSelectFile }) => {
+  const jokes = useLiveQuery(() => db.jokes.toArray());
+
+  const createNewJoke = async () => {
+    const name = prompt("Your new beat");
+    if (name) {
+      await db.jokes.add({
+        name,
+        content: "Hello",
+        updatedAt: Date.now()
+      })
+    }
+  };
+
+  return (
+    <Box width="100px" borderRight="1px solid" borderColor="gray.800">
+      <Button onClick={createNewJoke} size="sm" m={4} colorScheme="purple">
+      +
+      </Button>
+
+      <VStack align="stretch">
+        {jokes.map((joke) => (
+          <HStack>
+
+          <Text>📄 {joke.name}</Text>
+
+          </HStack>
+        ))}
+      </VStack>
+    </Box>
+  );
+
+
+};
 
 const startSimulation = async (text) => {
   console.log("симуляция запущена");
@@ -174,6 +211,10 @@ const makeQwenResponse = async (text) => {
 
 
 const CodeEditor = () => {
+
+  const [currentFileId, setCurrentFileId] = useState<number | null>(null);
+  const jokes = useLiveQuery(() => db.jokes.toArray()) || [];
+
   const [value, setValue] = useState('')
   const keywords = ["something"];
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -188,6 +229,25 @@ const CodeEditor = () => {
   const handleCreateCharacter = () => {
     console.log("Создали персонажа");
     console.log(value);
+  }
+
+  const handleCreateNewFile = async () => {
+  const name = prompt("Введите название бита:");
+  if (name) {
+    const id = await db.jokes.add({
+      name: name.endsWith('.js') ? name : `${name}.js`,
+      content: "",
+      updatedAt: Date.now()
+    });
+    // Сразу переключаемся на новый файл
+    setCurrentFileId(id as number);
+    setValue("");
+  }
+  }
+
+  const handleSelectFile = () => {
+    setCurrentFileId(joke.id);
+    setValue(joke.content);
   }
 
   const handleEditorDidMount = (editor, monaco) => {
@@ -273,6 +333,41 @@ const CodeEditor = () => {
       gap={4}
       p={4}
       width="100%">
+      <Box
+      width="260px"
+      borderRight="1px solid"
+      borderColor="gray.800"
+      display="flex"
+      flexDirection="column"
+      >
+      <HStack justify="space-between" p={4}>
+        <Text fontSize="xs" fontWeight="bold" color="gray.500" letterSpacing="wider">
+          EXPLORER
+        </Text>
+        <Button size="xs" colorScheme="purple" variant="ghost" onClick={handleCreateNewFile}>
+          +
+        </Button>
+      </HStack>
+
+      <VStack align="stretch" spacing={1} px={2} overflowY="auto">
+        {jokes.map((joke) => (
+          <HStack
+            key={joke.id}
+            p={2}
+            cursor="pointer"
+            borderRadius="md"
+            _hover={{ bg: "gray.800" }}
+            bg={currentFileId === joke.id ? "gray.700" : "transparent"} // Подсветка активного
+            onClick={() => handleSelectFile(joke)}
+          >
+            <Text color="orange.400" fontSize="sm">JS</Text>
+            <Text fontSize="sm" isTruncated>{joke.name}</Text>
+          </HStack>
+        ))}
+      </VStack>
+    </Box>
+
+
     <Box flex="1" borderRight="1px solid" borderColor="gray.700">
       <Editor
         height="100%"
