@@ -9,11 +9,20 @@ HStack,
 Avatar,
 AvatarBadge,
 Heading,
-Divider
+Divider,
+Tabs,
+TabList,
+TabPanels,
+Tab,
+TabPanel,
+Icon
 } from "@chakra-ui/react"
 
 
-import { keyframes } from "@emotion/react"
+import { FaCode, FaProjectDiagram } from "react-icons/fa";
+
+import { getStatusColor, getGlowColor, smartParse} from "./helpers.tsx"
+import { getPulseAnim } from "./animations.tsx"
 import { Editor } from "@monaco-editor/react"
 import { useState, useRef, useEffect, useCallback } from "react"
 import "./CodeEditor.css"
@@ -25,39 +34,11 @@ import { useLiveQuery } from "dexie-react-hooks";
 
 import ollama from 'ollama'
 
-import PivnoySlava from "../assets/characters/PivnoySlava.png";
-import BoomerMarina from "../assets/characters/BoomerMarina.png";
-import SnobArtem from "../assets/characters/SnobArtem.png";
-import ZoomerLiza from "../assets/characters/ZoomerLiza.png";
-import BadOleg from "../assets/characters/BadOleg.png";
-
-
-const pulseAnimation = keyframes`
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-`;
-
-const getPulseAnim = (color) => keyframes`
-  0% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0px ${color}
-  }
-  50% {
-    transform: scale(1.05);
-    /* Внутреннее плотное свечение + внешнее мягкое облако */
-    box-shadow: 0 0 15px 5px ${color}
-  }
-  100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0px ${color}
-`;
-
-const glowAnimation = keyframes`
-  0% { box-shadow: 0 0 0 0px rgba(72, 187, 120, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(72, 187, 120, 0); }
-  100% { box-shadow: 0 0 0 0px rgba(72, 187, 120, 0); }
-`;
+import PivnoySlava from   "../assets/characters/PivnoySlava.png";
+import BoomerMarina from  "../assets/characters/BoomerMarina.png";
+import SnobArtem from     "../assets/characters/SnobArtem.png";
+import ZoomerLiza from    "../assets/characters/ZoomerLiza.png";
+import BadOleg from       "../assets/characters/BadOleg.png";
 
 // fakeLLMEmulation
 const fakeLLMApiCall = (text) => {
@@ -108,39 +89,6 @@ export const FileSideBar = ({ onSelectFile }) => {
 
 };
 
-const smartParse = (rawContent) => {
-  try {
-    let clean = rawContent.replace(/```json/g, "").replace(/```/g, "").trim();
-
-    const firstBrace = clean.search(/[\[\{]/);
-    const lastBrace = Math.max(clean.lastIndexOf('}'), clean.lastIndexOf(']'));
-
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      clean = clean.substring(firstBrace, lastBrace + 1);
-    }
-
-    return JSON.parse(clean);
-  } catch (err) {
-    console.error("❌ Не удалось распарсить даже после очистки!");
-    console.log("Сырые данные:", rawContent);
-    return null;
-  }
-};
-
-const getGlowColor = (score) => {
-  if (score >= 7) return "#38A169"; // Аналог green.500
-  if (score >= 5) return "#ECC94B"; // Аналог yellow.400
-  if (score >= 0) return "#E53E3E"; // Аналог red.500
-  return "#A0AEC0";                // Аналог gray.500
-}
-
-const getStatusColor = (score) => {
-  if (score >= 7) return "green.500";
-  if (score >= 5) return "yellow.400";
-  if (score >= 0) return "red.500";
-  return "gray.500";
-}
-
 const CharacterCard = ({name, status, icon, score}) => {
   const badgeColor = getStatusColor(score);
   const glowColor = getGlowColor(score);
@@ -190,8 +138,21 @@ const makeQwenResponse = async (text) => {
 
 const CodeEditor = () => {
 
+// ######################################################################3
+// SYSTEM VARIABLES SECTION START
+// ######################################################################3
+
+
   const [currentFileId, setCurrentFileId] = useState<number | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
   const jokes = useLiveQuery(() => db.jokes.toArray()) || [];
+  const [value, setValue] = useState('')
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const editorRef = useRef(null);
+  const monacoRef = useRef(null);
+  const decorationsRef = useRef([]);
+  const debounceTimerRef = useRef(null);
 
   const [scores, setScores] = useState({
     "Славик":   -1,
@@ -201,7 +162,6 @@ const CodeEditor = () => {
     "Лиза":     -1,
   });
 
-
   const activeCharacters = [
     {id: "Лиза", role: Roles.ZoomerLiza},
     {id: "Артем", role: Roles.SnobArtem},
@@ -210,67 +170,22 @@ const CodeEditor = () => {
     {id: "Марина", role: Roles.BoomerMarina}
   ];
 
-  const [isSimulating, setIsSimulating] = useState(false);
 
-  const [value, setValue] = useState('')
-  const keywords = ["something"];
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+// ######################################################################3
+// SYSTEM VARIABLES SECTION END
+// ######################################################################3
 
-  const editorRef = useRef(null);
-  const monacoRef = useRef(null);
 
-  const decorationsRef = useRef([]);
-
-  const debounceTimerRef = useRef(null);
+// ######################################################################3
+// HANDLERS SECTION START
+// ######################################################################3
 
   const handleCreateCharacter = () => {
     console.log("Создали персонажа");
     console.log(value);
   }
 
-
-
-
-const handleRunSimulation = async (text) => {
-  for (const char of activeCharacters) {
-    const simulationResult  = await startSimulation(
-      text, char.role
-    );
-
-
-  console.log("Ставим оценки");
-  setScores(prevScores => ({
-    ...prevScores,
-    [char.id]: simulationResult.score
-  }));
-  };
-}
-
-const startSimulation = async (text, characterRole) => {
-  console.log("симуляция запущена");
-  try {
-    const response = await ollama.chat({
-      model: Models.bielik11b,
-      messages: [{role: Prompts.linterModelRole, content: Prompts.simulationPrompt + characterRole + "\n----------------\n" +text}],
-      options: {
-        temperature: 1,
-        num_ctx: 10000,
-      },
-      format: "json"
-    });
-    console.log(response);
-    const jsonResult = JSON.parse(response.message.content);
-    return jsonResult;
-  } catch {error} {
-    console.error("error:", error);
-    return null;
-
-  }
-}
-
-
-
-  const handleEditorChange = async (newValue: string | undefined) => {
+    const handleEditorChange = async (newValue: string | undefined) => {
     const text = newValue || "";
     setValue(text);
 
@@ -283,28 +198,68 @@ const startSimulation = async (text, characterRole) => {
   };
 
   const handleCreateNewFile = async () => {
-  const name = prompt("Введите название бита:");
-  if (name) {
-    const id = await db.jokes.add({
-      name: name.endsWith('.txt') ? name : `${name}.txt`,
-      content: "",
-      updatedAt: Date.now()
-    });
-    // Сразу переключаемся на новый файл
-    setCurrentFileId(id as number);
-    setValue("");
-  }
+    const name = prompt("Введите название бита:");
+    if (name) {
+      const id = await db.jokes.add({
+        name: name.endsWith('.txt') ? name : `${name}.txt`,
+        content: "",
+        updatedAt: Date.now()
+      });
+      setCurrentFileId(id as number);
+      setValue("");
+    }
   }
 
   const handleSelectFile = (joke) => {
     setCurrentFileId(joke.id);
     setValue(joke.content);
-  }
+  };
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
   };
+
+
+  const handleRunSimulation = async (text) => {
+    for (const char of activeCharacters) {
+      const simulationResult  = await startSimulation(
+        text, char.role
+      );
+    console.log("Ставим оценки");
+    setScores(prevScores => ({
+      ...prevScores,
+      [char.id]: simulationResult.score
+    }));
+    };
+}
+
+
+// ######################################################################3
+// HANDLERS SECTION END
+// ######################################################################3
+
+  const startSimulation = async (text, characterRole) => {
+    console.log("симуляция запущена");
+    try {
+      const response = await ollama.chat({
+        model: Models.bielik11b,
+        messages: [{role: Prompts.linterModelRole, content: Prompts.simulationPrompt + characterRole + "\n----------------\n" +text}],
+        options: {
+          temperature: 1,
+          num_ctx: 10000,
+        },
+        format: "json"
+      });
+      console.log(response);
+      const jsonResult = JSON.parse(response.message.content);
+      return jsonResult;
+    } catch {error} {
+      console.error("error:", error);
+      return null;
+
+    }
+  }
 
   const applyDecorations = (data) => {
     const editor = editorRef.current;
@@ -317,8 +272,6 @@ const startSimulation = async (text, characterRole) => {
     data.analyzed.forEach((item) => {
       const regex = new RegExp(`${item.text}`, "gi")
       let match;
-      // console.log(value)
-      // console.log(regex);
       console.log(item.text);
       while ((match = regex.exec(value)) !== null) {
         const start = model.getPositionAt(match.index);
@@ -419,7 +372,28 @@ const startSimulation = async (text, characterRole) => {
     </Box>
 
 
-    <Box flex="1" borderRight="1px solid" borderColor="gray.700">
+    <Box
+    flex="1"
+    borderRight="1px solid"
+    borderColor="gray.700"
+    flexDirection="column"
+    display="flex"
+    >
+      <Tabs isLazy variant="soft-rounded" colorScheme="purple" flex="1" display="flex" flexDirection="column">
+      <Box p={2} borderBottom="1px solid" borderColor="gray.800">
+      <TabList>
+      <Tab _selected={{color: 'white', bg: 'purple.600'}} color="gray.400" fontSize="sm">
+        <Icon mr={2} as={FaCode}/> Редактор
+      </Tab>
+      <Tab _selected={{ color: 'white', bg: 'purple.600' }} color="gray.400" fontSize="sm">
+          <Icon as={FaProjectDiagram} mr={2} /> Заходы
+        </Tab>
+      </TabList>
+      </Box>
+
+      <TabPanels flex="1" display="flex">
+      <TabPanel p={0} flex="1" display="flex" flexDirection="column">
+      <Box flex="1" position="relative">
       <Editor
         height="100%"
         theme="vs-dark"
@@ -441,13 +415,39 @@ const startSimulation = async (text, characterRole) => {
                   overviewRulerLanes: 0,
         }}
         />
+        </Box>
+    <Button
+      bg="whiteAlpha.200"
+      backdropFilter="blur(100px)"
+      border="2px solid"
+      borderColor="whiteAlpha.300"
+      _hover={{
+        bg: "whiteAlpha.300",
+        borderColor: "purple.400",
+      }}
+      variant="ghost"
+      color="purple.200"
+      // ...
+    >
+      запустить симуляцию
+    </Button>
+    </TabPanel>
 
-      <Button
-        colorScheme="purple"
-        size="lg"
-        isDisabled={!value.trim()}
-        onClick = {() => handleRunSimulation(value)}
-      >Запустить симуляцию</Button>
+    <TabPanel>
+    <Box
+    w="100%"
+    h="100%"
+    bg="gray.900"
+    backgroundImage="radial-gradient(#4A5568 1px, transparent 1px)"
+    display="flex"
+    alignItems="center"
+    color="gray.500"
+    >
+    <Text>Здесь будет Drag & Drop канвас для шуток </Text>
+    </Box>
+    </TabPanel>
+    </TabPanels>
+    </Tabs>
     </Box>
 
     <Box
@@ -492,7 +492,6 @@ const startSimulation = async (text, characterRole) => {
       icon={ZoomerLiza}
       score={scores["Лиза"]}
       />
-
     </Box>
     </Flex>
 
